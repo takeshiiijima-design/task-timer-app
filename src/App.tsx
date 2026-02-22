@@ -153,7 +153,7 @@ function App() {
     return () => unsub();
   }, []);
 
-  // --- Firestore への自動保存（クロスデバイス同期・3秒デバウンス）---
+  // --- Firestore への自動保存（1秒デバウンス）---
   useEffect(() => {
     if (!firestoreLoaded) return;
     if (skipNextSaveRef.current) {
@@ -165,7 +165,23 @@ function App() {
       setDoc(DATA_DOC, { tasks, tags: availableTags, projects: availableProjects }).catch(
         (e) => console.error("Firestore保存エラー:", e)
       );
-    }, 3000);
+    }, 1000);
+  }, [tasks, availableTags, availableProjects, firestoreLoaded]);
+
+  // --- ページが非表示になる瞬間（リロード・タブ切替）に即座保存 ---
+  useEffect(() => {
+    if (!firestoreLoaded) return;
+    const handleHide = () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      setDoc(DATA_DOC, { tasks, tags: availableTags, projects: availableProjects }).catch(
+        (e) => console.error("Firestore即座保存エラー:", e)
+      );
+    };
+    document.addEventListener("visibilitychange", handleHide);
+    return () => document.removeEventListener("visibilitychange", handleHide);
   }, [tasks, availableTags, availableProjects, firestoreLoaded]);
 
   // --- タイマー tick ---
