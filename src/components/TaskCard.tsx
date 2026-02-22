@@ -174,8 +174,8 @@ export default function TaskCard({
           ))}
         </div>
 
-        {/* ステータスバッジ */}
-        <div className="shrink-0 w-[72px] flex justify-center" onClick={(e) => e.stopPropagation()}>
+        {/* ステータスバッジ（スマホ非表示） */}
+        <div className="hidden sm:flex shrink-0 w-[72px] justify-center" onClick={(e) => e.stopPropagation()}>
           <select
             value={task.status}
             onChange={(e) => {
@@ -200,9 +200,9 @@ export default function TaskCard({
           </select>
         </div>
 
-        {/* 優先度 */}
+        {/* 優先度（スマホ非表示） */}
         <div
-          className="shrink-0 w-[40px] flex justify-center"
+          className="hidden sm:flex shrink-0 w-[40px] justify-center"
           onClick={(e) => e.stopPropagation()}
           title={PRIORITY_LABELS[task.priority]}
         >
@@ -218,9 +218,9 @@ export default function TaskCard({
           </button>
         </div>
 
-        {/* 期限 */}
+        {/* 期限（スマホ非表示） */}
         <div
-          className="shrink-0 w-[80px] text-center"
+          className="hidden sm:block shrink-0 w-[80px] text-center"
           onClick={(e) => e.stopPropagation()}
         >
           {editingDueDate ? (
@@ -277,9 +277,9 @@ export default function TaskCard({
           </span>
         </div>
 
-        {/* 予測時間 */}
+        {/* 予測時間（スマホ非表示） */}
         <div
-          className="shrink-0 w-[60px] text-center"
+          className="hidden sm:block shrink-0 w-[60px] text-center"
           onClick={(e) => e.stopPropagation()}
         >
           {editingEstimate ? (
