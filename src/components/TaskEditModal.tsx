@@ -203,9 +203,9 @@ export default function TaskEditModal({
     <div
       ref={backdropRef}
       onClick={handleBackdropClick}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm sm:p-4"
     >
-      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl shadow-gray-200/50 overflow-hidden max-h-[88vh] flex flex-col">
+      <div className="w-full sm:max-w-4xl rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[88vh] flex flex-col">
 
         {/* ヘッダー */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 shrink-0">
@@ -223,10 +223,10 @@ export default function TaskEditModal({
         </div>
 
         {/* 2カラムコンテンツ */}
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-col sm:flex-row flex-1 min-h-0">
 
           {/* ===== 左カラム: タスク名・メモ・サブタスク ===== */}
-          <div className="flex-1 flex flex-col min-w-0 border-r border-gray-100 overflow-y-auto">
+          <div className="flex-1 flex flex-col min-w-0 border-b sm:border-b-0 sm:border-r border-gray-100 overflow-y-auto">
             <div className="px-6 pt-5 pb-4 space-y-4">
 
               {/* タスク名 */}
@@ -333,7 +333,7 @@ export default function TaskEditModal({
           </div>
 
           {/* ===== 右カラム: 属性情報 ===== */}
-          <div className="w-72 shrink-0 overflow-y-auto px-5 py-4 space-y-0 bg-gray-50/30">
+          <div className="w-full sm:w-72 sm:shrink-0 overflow-y-auto px-5 py-4 space-y-0 bg-gray-50/30">
 
             {/* タイマー + 実績時間 */}
             <div className="pb-3 mb-3 border-b border-gray-100">

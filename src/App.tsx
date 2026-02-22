@@ -125,6 +125,7 @@ function App() {
   const [filterCustomFrom, setFilterCustomFrom] = useState(todayKey());
   const [filterCustomTo, setFilterCustomTo] = useState(todayKey());
   const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // --- localStorage への自動保存 ---
@@ -449,7 +450,7 @@ function App() {
     <div className="flex h-screen bg-gray-50 overflow-hidden">
 
       {/* ===== 左サイドバー ===== */}
-      <aside className="w-52 shrink-0 flex flex-col bg-white border-r border-gray-200 h-full">
+      <aside className="hidden md:flex md:flex-col w-52 shrink-0 bg-white border-r border-gray-200 h-full">
         {/* ロゴ */}
         <div className="px-5 py-4 border-b border-gray-100">
           <h1 className="text-[15px] font-bold text-gray-900 tracking-tight">Task Timer</h1>
@@ -541,10 +542,13 @@ function App() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* トップバー */}
-        <header className="shrink-0 flex items-center gap-3 px-6 py-3 bg-white border-b border-gray-200">
-          {/* 検索（リスト時のみ） */}
+        <header className="shrink-0 flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 bg-white border-b border-gray-200">
+          {/* Mobile: タイトル */}
+          <span className="md:hidden text-sm font-bold text-gray-900">Task Timer</span>
+
+          {/* 検索（デスクトップ・リスト時のみ） */}
           {viewMode === "list" && (
-            <div className="relative flex-1 max-w-md">
+            <div className="hidden md:block relative flex-1 max-w-md">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -558,9 +562,9 @@ function App() {
             </div>
           )}
 
-          {/* フィルター群（リスト時） */}
+          {/* フィルター群（デスクトップ・リスト時のみ） */}
           {viewMode === "list" && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="hidden md:flex items-center gap-1.5 flex-wrap">
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as TaskStatus | "")}
@@ -668,9 +672,41 @@ function App() {
             </div>
           )}
 
-          {/* アーカイブトグル（右端） */}
+          {/* Mobile: フィルターボタン */}
           {viewMode === "list" && (
-            <label className="ml-auto flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+            <button
+              onClick={() => setShowMobileFilters((v) => !v)}
+              className={`md:hidden flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                showMobileFilters || hasActiveFilters
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+              </svg>
+              フィルター
+              {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0" />}
+            </button>
+          )}
+
+          {/* スペーサー（モバイル） */}
+          <div className="flex-1 md:hidden" />
+
+          {/* Mobile: New Task ボタン */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="md:hidden flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-indigo-200"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New
+          </button>
+
+          {/* アーカイブトグル（デスクトップ・リスト時） */}
+          {viewMode === "list" && (
+            <label className="hidden md:flex ml-auto items-center gap-1.5 cursor-pointer select-none shrink-0">
               <div className="relative">
                 <input
                   type="checkbox"
@@ -686,8 +722,80 @@ function App() {
           )}
         </header>
 
+        {/* モバイルフィルターパネル */}
+        {viewMode === "list" && showMobileFilters && (
+          <div className="md:hidden shrink-0 bg-white border-b border-gray-100 px-4 py-3 space-y-2">
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="タスク名で検索..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-4 py-2 text-xs text-gray-800 placeholder:text-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all"
+              />
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as TaskStatus | "")} className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 focus:outline-none">
+                <option value="">ステータス</option>
+                {(Object.entries(STATUS_LABELS) as [TaskStatus, string][]).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+              <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 focus:outline-none">
+                <option value="">プロジェクト</option>
+                {usedProjects.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 focus:outline-none">
+                <option value="">タグ</option>
+                {usedTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+              </select>
+              <select value={filterDateRange} onChange={(e) => setFilterDateRange(e.target.value as DateRange)} className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 focus:outline-none">
+                <option value="">期間</option>
+                <option value="today">今日</option>
+                <option value="this_week">今週</option>
+                <option value="overdue">期限超過</option>
+              </select>
+              <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 focus:outline-none">
+                <option value="created">作成順</option>
+                <option value="dueDate_asc">期限↑</option>
+                <option value="dueDate_desc">期限↓</option>
+              </select>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => { setSearchQuery(""); setFilterStatus(""); setFilterProject(""); setFilterTag(""); setFilterDateRange(""); setSortKey("created"); }}
+                  className="shrink-0 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[11px] font-semibold text-gray-500"
+                >リセット</button>
+              )}
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <div className="relative">
+                <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="sr-only peer" />
+                <div className="h-4 w-7 rounded-full bg-gray-200 peer-checked:bg-indigo-500 transition-colors" />
+                <div className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-3" />
+              </div>
+              <span className="text-[11px] font-medium text-gray-500">アーカイブ表示</span>
+            </label>
+          </div>
+        )}
+
+        {/* モバイル: 計測中タスクバナー */}
+        {runningTask && (
+          <div className="md:hidden shrink-0 flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-100">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+            </span>
+            <p className="flex-1 text-xs font-medium text-blue-800 truncate">{runningTask.title}</p>
+            <span className="font-mono text-xs font-bold text-blue-600 tabular-nums shrink-0">{formatTime(runningTask.elapsedSeconds)}</span>
+            <button onClick={() => toggleTimer(runningTask.id)} className="shrink-0 rounded bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-600 hover:bg-red-200">Stop</button>
+          </div>
+        )}
+
         {/* スクロール可能なコンテンツ */}
-        <main className="flex-1 overflow-y-auto px-6 py-5">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5">
           {viewMode === "dashboard" ? (
             <TimesheetDashboard
             tasks={tasks}
@@ -747,6 +855,31 @@ function App() {
             </>
           )}
         </main>
+        {/* モバイルボトムナビ */}
+        <nav className="md:hidden shrink-0 flex items-stretch bg-white border-t border-gray-200">
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setViewMode(item.key)}
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-all ${
+                viewMode === item.key ? "text-indigo-600" : "text-gray-400"
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold text-gray-400"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            設定
+          </button>
+        </nav>
       </div>
 
       {/* ===== モーダル群 ===== */}
