@@ -48,16 +48,6 @@ const STORAGE_KEY_PROJECTS = "task-timer-projects";
 
 const DATA_DOC = doc(db, "appData", "main");
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 function saveToStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -105,18 +95,11 @@ function getWeekEndDate(): string {
 }
 
 function App() {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const raw = loadFromStorage<unknown[]>(STORAGE_KEY_TASKS, []);
-    return migrateTasks(raw);
-  });
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
-  const [availableTags, setAvailableTags] = useState<string[]>(() =>
-    loadFromStorage<string[]>(STORAGE_KEY_TAGS, DEFAULT_TAGS)
-  );
-  const [availableProjects, setAvailableProjects] = useState<string[]>(() =>
-    loadFromStorage<string[]>(STORAGE_KEY_PROJECTS, DEFAULT_PROJECTS)
-  );
+  const [availableTags, setAvailableTags] = useState<string[]>(DEFAULT_TAGS);
+  const [availableProjects, setAvailableProjects] = useState<string[]>(DEFAULT_PROJECTS);
   const [showSettings, setShowSettings] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -489,6 +472,17 @@ function App() {
       ),
     },
   ];
+
+  if (!firestoreLoaded) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent mx-auto mb-3" />
+          <p className="text-sm text-gray-400">データを読み込んでいます...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
