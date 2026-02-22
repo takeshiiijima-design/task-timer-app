@@ -501,7 +501,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex bg-gray-50 overflow-hidden" style={{ height: '100dvh' }}>
 
       {/* ===== 左サイドバー ===== */}
       <aside className="hidden md:flex md:flex-col w-52 shrink-0 bg-white border-r border-gray-200 h-full">
@@ -596,7 +596,7 @@ function App() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* トップバー */}
-        <header className="shrink-0 flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 bg-white border-b border-gray-200">
+        <header className="shrink-0 sticky top-0 z-10 flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 bg-white border-b border-gray-200">
           {/* Mobile: タイトル */}
           <span className="md:hidden text-sm font-bold text-gray-900">Task Timer</span>
 
@@ -849,7 +849,7 @@ function App() {
         )}
 
         {/* スクロール可能なコンテンツ */}
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 pb-20 md:pb-5">
           {viewMode === "dashboard" ? (
             <TimesheetDashboard
             tasks={tasks}
@@ -909,8 +909,8 @@ function App() {
             </>
           )}
         </main>
-        {/* モバイルボトムナビ */}
-        <nav className="md:hidden shrink-0 flex items-stretch bg-white border-t border-gray-200">
+        {/* モバイルボトムナビ（fixed で常に表示） */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 flex items-stretch bg-white border-t border-gray-200">
           {navItems.map((item) => (
             <button
               key={item.key}
