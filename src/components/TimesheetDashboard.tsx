@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { Task } from "../types";
 
 type GroupBy = "task" | "project" | "tag";
@@ -6,6 +6,8 @@ type GroupBy = "task" | "project" | "tag";
 interface TimesheetDashboardProps {
   tasks: Task[];
   formatTime: (seconds: number) => string;
+  onUpdateTask?: (id: number, patch: Partial<Task>) => void;
+  onEditTask?: (id: number) => void;
 }
 
 /** 短い時間表示 (例: 1h 23m, 45m) */
@@ -69,6 +71,7 @@ function flattenTasks(tasks: Task[]): Task[] {
 
 interface Row {
   label: string;
+  taskObj?: Task; // task groupBy 時のみ
   seconds: Record<string, number>;
   weekTotal: number;
   totalElapsed: number; // 全期間の実績秒
@@ -100,9 +103,46 @@ function diffColor(actual: number, estimated: number): string {
 export default function TimesheetDashboard({
   tasks,
   formatTime,
+  onUpdateTask,
+  onEditTask,
 }: TimesheetDashboardProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [groupBy, setGroupBy] = useState<GroupBy>("task");
+  const [editingCell, setEditingCell] = useState<{
+    taskId: number;
+    date: string;
+    minutes: string;
+  } | null>(null);
+  const cellInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingCell) cellInputRef.current?.focus();
+  }, [editingCell]);
+
+  const handleCellClick = (taskId: number, date: string, currentSeconds: number) => {
+    if (!onUpdateTask) return;
+    setEditingCell({
+      taskId,
+      date,
+      minutes: currentSeconds > 0 ? String(Math.round(currentSeconds / 60)) : "",
+    });
+  };
+
+  const handleCellSave = () => {
+    if (!editingCell || !onUpdateTask) return;
+    const task = allTasks.find((t) => t.id === editingCell.taskId);
+    if (!task) { setEditingCell(null); return; }
+    const newSeconds = Math.max(0, (Number(editingCell.minutes) || 0) * 60);
+    const newDailyLog = { ...task.dailyLog };
+    if (newSeconds > 0) {
+      newDailyLog[editingCell.date] = newSeconds;
+    } else {
+      delete newDailyLog[editingCell.date];
+    }
+    const newElapsedSeconds = Object.values(newDailyLog).reduce((sum, v) => sum + v, 0);
+    onUpdateTask(task.id, { dailyLog: newDailyLog, elapsedSeconds: newElapsedSeconds });
+    setEditingCell(null);
+  };
 
   const weekStart = useMemo(() => {
     const now = new Date();
@@ -130,6 +170,7 @@ export default function TimesheetDashboard({
           }
           return {
             label: t.title + (t.project ? ` / ${t.project}` : ""),
+            taskObj: t,
             seconds,
             weekTotal,
             totalElapsed: t.elapsedSeconds,
@@ -362,25 +403,74 @@ export default function TimesheetDashboard({
                   className="border-b border-gray-50 last:border-b-0 hover:bg-gray-50/40 transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <span className="text-xs font-medium text-gray-800">
-                      {row.label}
-                    </span>
+                    {row.taskObj && onEditTask ? (
+                      <button
+                        onClick={() => onEditTask(row.taskObj!.id)}
+                        className="text-xs font-medium text-gray-800 hover:text-indigo-600 hover:underline text-left truncate max-w-[200px] block"
+                      >
+                        {row.label}
+                      </button>
+                    ) : (
+                      <span className="text-xs font-medium text-gray-800">{row.label}</span>
+                    )}
                   </td>
                   {weekDays.map((day) => {
                     const s = row.seconds[day] || 0;
+                    const isEditing =
+                      editingCell?.taskId === row.taskObj?.id &&
+                      editingCell?.date === day;
+                    const canEdit = !!row.taskObj && !!onUpdateTask;
                     return (
                       <td
                         key={day}
                         className={`text-center px-2 py-3 ${
                           isToday(day) ? "bg-blue-50/40" : ""
-                        }`}
+                        } ${canEdit && !isEditing ? "cursor-pointer group/cell" : ""}`}
+                        onClick={() => {
+                          if (canEdit && !isEditing && !editingCell) {
+                            handleCellClick(row.taskObj!.id, day, s);
+                          }
+                        }}
                       >
-                        {s > 0 ? (
-                          <span className="inline-block rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 tabular-nums">
+                        {isEditing ? (
+                          <div className="flex items-center justify-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              ref={cellInputRef}
+                              type="number"
+                              min={0}
+                              value={editingCell!.minutes}
+                              onChange={(e) =>
+                                setEditingCell({ ...editingCell!, minutes: e.target.value })
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.nativeEvent.isComposing) handleCellSave();
+                                if (e.key === "Escape") setEditingCell(null);
+                              }}
+                              className="w-12 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs text-center font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              placeholder="分"
+                            />
+                            <span className="text-[9px] text-gray-400">m</span>
+                            <button
+                              onClick={handleCellSave}
+                              className="rounded bg-blue-500 px-1 py-0.5 text-[9px] text-white hover:bg-blue-600"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setEditingCell(null)}
+                              className="rounded bg-gray-200 px-1 py-0.5 text-[9px] text-gray-600 hover:bg-gray-300"
+                            >
+                              ✗
+                            </button>
+                          </div>
+                        ) : s > 0 ? (
+                          <span className={`inline-block rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 tabular-nums ${canEdit ? "group-hover/cell:ring-1 group-hover/cell:ring-indigo-300 group-hover/cell:bg-indigo-50 group-hover/cell:text-indigo-700" : ""}`}>
                             {shortTime(s)}
                           </span>
                         ) : (
-                          <span className="text-gray-300 text-xs">--</span>
+                          <span className={`text-xs ${canEdit ? "text-gray-200 group-hover/cell:text-indigo-300" : "text-gray-300"}`}>
+                            {canEdit ? "+" : "--"}
+                          </span>
                         )}
                       </td>
                     );

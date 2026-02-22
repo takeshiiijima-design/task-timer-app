@@ -16,22 +16,15 @@ interface TaskCardProps {
   formatTime: (seconds: number) => string;
 }
 
-/** 相対日付を表示（ClickUp風） */
-function relativeDate(dateStr: string | null): string {
+/** 期限を絶対日付で表示（今日のみ「今日」） */
+function formatDueDate(dateStr: string | null): string {
   if (!dateStr) return "";
   const target = new Date(dateStr + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const diffMs = target.getTime() - today.getTime();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
   if (diffDays === 0) return "今日";
-  if (diffDays === 1) return "明日";
-  if (diffDays === -1) return "昨日";
-  if (diffDays > 1 && diffDays <= 7) return `${diffDays}日後`;
-  if (diffDays < -1 && diffDays >= -7) return `${Math.abs(diffDays)}日前`;
-  // 1週間を超えたら MM/DD
-  return dateStr.slice(5).replace("-", "/");
+  return `${target.getMonth() + 1}/${target.getDate()}`;
 }
 
 /** 期限の色クラス */
@@ -247,7 +240,7 @@ export default function TaskCard({
               onClick={() => setEditingDueDate(true)}
               className={`inline-block px-1 py-0.5 text-[11px] rounded hover:bg-gray-100 cursor-pointer transition-colors ${dueDateColor(task.dueDate, task.status)}`}
             >
-              {task.dueDate ? relativeDate(task.dueDate) : "—"}
+              {task.dueDate ? formatDueDate(task.dueDate) : "—"}
             </span>
           )}
         </div>
