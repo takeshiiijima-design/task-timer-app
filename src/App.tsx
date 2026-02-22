@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { Task, TaskStatus } from "./types";
 import { STATUS_LABELS } from "./types";
+import { db } from "./firebase";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import StatusGroup from "./components/StatusGroup";
 import {
   updateTaskInTree,
@@ -43,6 +45,8 @@ const DEFAULT_PROJECTS = ["プロジェクトA", "プロジェクトB"];
 const STORAGE_KEY_TASKS = "task-timer-tasks";
 const STORAGE_KEY_TAGS = "task-timer-tags";
 const STORAGE_KEY_PROJECTS = "task-timer-projects";
+
+const DATA_DOC = doc(db, "appData", "main");
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -126,9 +130,12 @@ function App() {
   const [filterCustomTo, setFilterCustomTo] = useState(todayKey());
   const [sortKey, setSortKey] = useState<SortKey>("created");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [firestoreLoaded, setFirestoreLoaded] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextSaveRef = useRef(false);
 
-  // --- localStorage への自動保存 ---
+  // --- localStorage への自動保存（オフライン用バックアップ）---
   useEffect(() => {
     saveToStorage(STORAGE_KEY_TASKS, tasks);
   }, [tasks]);
@@ -140,6 +147,43 @@ function App() {
   useEffect(() => {
     saveToStorage(STORAGE_KEY_PROJECTS, availableProjects);
   }, [availableProjects]);
+
+  // --- Firestore リアルタイム同期（読み込み）---
+  useEffect(() => {
+    const unsub = onSnapshot(
+      DATA_DOC,
+      (snap) => {
+        if (snap.exists()) {
+          skipNextSaveRef.current = true;
+          const data = snap.data();
+          setTasks(migrateTasks((data.tasks as unknown[]) || []));
+          setAvailableTags((data.tags as string[]) || DEFAULT_TAGS);
+          setAvailableProjects((data.projects as string[]) || DEFAULT_PROJECTS);
+        }
+        setFirestoreLoaded(true);
+      },
+      (error) => {
+        console.error("Firestore読み込みエラー:", error);
+        setFirestoreLoaded(true);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // --- Firestore への自動保存（クロスデバイス同期・3秒デバウンス）---
+  useEffect(() => {
+    if (!firestoreLoaded) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      setDoc(DATA_DOC, { tasks, tags: availableTags, projects: availableProjects }).catch(
+        (e) => console.error("Firestore保存エラー:", e)
+      );
+    }, 3000);
+  }, [tasks, availableTags, availableProjects, firestoreLoaded]);
 
   // --- タイマー tick ---
   const tick = useCallback(() => {
