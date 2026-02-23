@@ -28,6 +28,7 @@ import TaskEditModal from "./components/TaskEditModal";
 import TaskCreateModal from "./components/TaskCreateModal";
 import SettingsModal from "./components/SettingsModal";
 import TimesheetDashboard from "./components/TimesheetDashboard";
+import GoogleCalendarSync from "./components/GoogleCalendarSync";
 
 type ViewMode = "list" | "kanban" | "dashboard";
 type SortKey =
@@ -101,6 +102,7 @@ function App() {
   const [availableTags, setAvailableTags] = useState<string[]>(DEFAULT_TAGS);
   const [availableProjects, setAvailableProjects] = useState<string[]>(DEFAULT_PROJECTS);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCalendarSync, setShowCalendarSync] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -211,6 +213,10 @@ function App() {
   // --- アクション ---
   const addTask = (task: Task) => {
     setTasks((prev) => [...prev, task]);
+  };
+
+  const addTasks = (newTasks: Task[]) => {
+    setTasks((prev) => [...prev, ...newTasks]);
   };
 
   const deleteTask = (id: number) => {
@@ -758,9 +764,21 @@ function App() {
             New
           </button>
 
+          {/* Googleカレンダー連携ボタン */}
+          <button
+            onClick={() => setShowCalendarSync(true)}
+            className="hidden md:flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 transition-all shrink-0 ml-auto"
+            title="Googleカレンダーから取り込む"
+          >
+            <svg className="h-3.5 w-3.5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z"/>
+            </svg>
+            Calendar
+          </button>
+
           {/* アーカイブトグル（デスクトップ・リスト時） */}
           {viewMode === "list" && (
-            <label className="hidden md:flex ml-auto items-center gap-1.5 cursor-pointer select-none shrink-0">
+            <label className="hidden md:flex items-center gap-1.5 cursor-pointer select-none shrink-0">
               <div className="relative">
                 <input
                   type="checkbox"
@@ -958,6 +976,13 @@ function App() {
           onEditTask={(id) => setEditingTaskId(id)}
           onClose={() => setEditingTaskId(null)}
           formatTime={formatTime}
+        />
+      )}
+
+      {showCalendarSync && (
+        <GoogleCalendarSync
+          onAddTasks={addTasks}
+          onClose={() => setShowCalendarSync(false)}
         />
       )}
 
