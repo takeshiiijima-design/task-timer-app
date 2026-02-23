@@ -177,7 +177,11 @@ export default function TimesheetDashboard({
             estimatedSeconds: t.estimatedMinutes * 60,
           };
         })
-        .filter((r) => r.weekTotal > 0 || r.totalElapsed > 0);
+        .filter((r) => {
+          const hasDueDateThisWeek =
+            r.taskObj?.dueDate != null && weekDays.includes(r.taskObj.dueDate);
+          return hasDueDateThisWeek || r.weekTotal > 0;
+        });
     }
 
     if (groupBy === "project") {
@@ -202,7 +206,7 @@ export default function TimesheetDashboard({
           for (const day of weekDays) weekTotal += seconds[day] || 0;
           return { label, seconds, weekTotal, totalElapsed: total, estimatedSeconds: est };
         })
-        .filter((r) => r.weekTotal > 0 || r.totalElapsed > 0);
+        .filter((r) => r.weekTotal > 0);
     }
 
     // groupBy === "tag"
@@ -229,7 +233,7 @@ export default function TimesheetDashboard({
         for (const day of weekDays) weekTotal += seconds[day] || 0;
         return { label, seconds, weekTotal, totalElapsed: total, estimatedSeconds: est };
       })
-      .filter((r) => r.weekTotal > 0 || r.totalElapsed > 0);
+      .filter((r) => r.weekTotal > 0);
   }, [allTasks, weekDays, groupBy]);
 
   // --- 列合計 ---
