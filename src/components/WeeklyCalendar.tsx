@@ -72,6 +72,16 @@ export default function WeeklyCalendar({ tasks, onEditTask }: WeeklyCalendarProp
     return map;
   }, [allTasks]);
 
+  const noDateTasks = useMemo(
+    () => allTasks.filter((t) => !t.dueDate && !t.startDate && t.status !== "done"),
+    [allTasks]
+  );
+
+  const weekTaskCount = useMemo(() => {
+    const weekKeys = weekDays.map(toDateStr);
+    return weekKeys.reduce((sum, k) => sum + (tasksByDate[k]?.length ?? 0), 0);
+  }, [weekDays, tasksByDate]);
+
   const weekLabel = (() => {
     const s = weekDays[0];
     const e = weekDays[6];
@@ -221,6 +231,37 @@ export default function WeeklyCalendar({ tasks, onEditTask }: WeeklyCalendarProp
           })}
         </div>
       </div>
+
+      {/* この週にタスクがない場合のヒント */}
+      {weekTaskCount === 0 && (
+        <div className="rounded-xl border border-dashed border-gray-200 bg-white px-5 py-6 text-center">
+          <p className="text-xs font-medium text-gray-400">この週に期日・開始日が設定されたタスクはありません</p>
+          <p className="text-[10px] text-gray-300 mt-1">タスクの編集モーダルで「期日」を設定するか、Googleカレンダーから取り込んでください</p>
+        </div>
+      )}
+
+      {/* 日付未設定タスク */}
+      {noDateTasks.length > 0 && (
+        <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            日付未設定 ({noDateTasks.length}件)
+          </p>
+          <div className="space-y-1.5">
+            {noDateTasks.slice(0, 5).map((task) => (
+              <button
+                key={task.id}
+                onClick={() => onEditTask(task.id)}
+                className={`w-full text-left rounded-lg border-l-2 border border-gray-100 pl-2 pr-1.5 py-1.5 shadow-sm transition-all hover:shadow-md ${PRIORITY_LEFT_BORDER[task.priority]} ${PRIORITY_BG[task.priority]}`}
+              >
+                <p className="text-[11px] font-semibold text-gray-700 truncate">{task.title}</p>
+              </button>
+            ))}
+            {noDateTasks.length > 5 && (
+              <p className="text-[10px] text-gray-400 text-center">他 {noDateTasks.length - 5}件...</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
