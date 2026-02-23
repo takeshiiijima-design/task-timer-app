@@ -34,6 +34,28 @@ interface GoogleCalendarSyncProps {
 }
 
 const CONNECTED_KEY = "gcal-connected";
+const TOKEN_KEY = "gcal-token";
+const TOKEN_EXPIRY_KEY = "gcal-token-expiry";
+
+function saveToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_EXPIRY_KEY, (Date.now() + 3500 * 1000).toString()); // 約58分
+  localStorage.setItem(CONNECTED_KEY, "1");
+}
+
+function getCachedToken(): string | null {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
+  if (!token || !expiry) return null;
+  if (Date.now() > parseInt(expiry) - 5 * 60 * 1000) return null; // 残り5分以内は期限切れ扱い
+  return token;
+}
+
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  localStorage.removeItem(CONNECTED_KEY);
+}
 
 let idCounter = 0;
 function newId() {
@@ -82,7 +104,10 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
   const [dateRange, setDateRange] = useState({ start: todayKey(), end: nextWeekKey() });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMode, setImportMode] = useState<Record<string, ImportMode>>({});
-  const [autoConnecting, setAutoConnecting] = useState(!!localStorage.getItem(CONNECTED_KEY));
+  const [autoConnecting, setAutoConnecting] = useState(() => {
+    // キャッシュ済みトークンがあれば即時使用（ステート初期化時に判定）
+    return !getCachedToken() && !!localStorage.getItem(CONNECTED_KEY);
+  });
 
   const fetchEvents = useCallback(async (token: string, range: typeof dateRange) => {
     setLoading(true);
@@ -96,6 +121,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
       );
       if (!res.ok) {
         if (res.status === 401) {
+          clearToken();
           setAccessToken(null);
           setError("認証の有効期限が切れました。再度サインインしてください。");
           return;
@@ -118,8 +144,16 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
     }
   }, []);
 
-  // モーダルを開いた時に自動でトークン取得を試みる
+  // モーダルを開いた時に自動接続
   useEffect(() => {
+    // キャッシュ済みトークンがあればそのまま使用
+    const cached = getCachedToken();
+    if (cached) {
+      setAccessToken(cached);
+      fetchEvents(cached, dateRange);
+      return;
+    }
+    // 過去に接続したことがあればGISでサイレント取得を試みる
     if (!localStorage.getItem(CONNECTED_KEY)) return;
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const timer = setTimeout(() => {
@@ -134,11 +168,11 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
         callback: (resp) => {
           setAutoConnecting(false);
           if (resp.access_token) {
+            saveToken(resp.access_token);
             setAccessToken(resp.access_token);
             fetchEvents(resp.access_token, dateRange);
           } else {
-            // サイレント取得失敗 → サインインボタンを表示するだけ（ポップアップ不要）
-            localStorage.removeItem(CONNECTED_KEY);
+            clearToken();
           }
         },
       }).requestAccessToken();
@@ -162,7 +196,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
       scope: "https://www.googleapis.com/auth/calendar.readonly",
       callback: (resp) => {
         if (resp.access_token) {
-          localStorage.setItem(CONNECTED_KEY, "1");
+          saveToken(resp.access_token);
           setAccessToken(resp.access_token);
           fetchEvents(resp.access_token, dateRange);
         } else {
