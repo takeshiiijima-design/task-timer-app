@@ -29,8 +29,9 @@ import TaskCreateModal from "./components/TaskCreateModal";
 import SettingsModal from "./components/SettingsModal";
 import TimesheetDashboard from "./components/TimesheetDashboard";
 import GoogleCalendarSync from "./components/GoogleCalendarSync";
+import WeeklyCalendar from "./components/WeeklyCalendar";
 
-type ViewMode = "list" | "kanban" | "dashboard";
+type ViewMode = "list" | "kanban" | "dashboard" | "calendar";
 type SortKey =
   | "created"
   | "dueDate_asc"
@@ -493,6 +494,15 @@ function App() {
         </svg>
       ),
     },
+    {
+      key: "calendar" as ViewMode,
+      label: "カレンダー",
+      icon: (
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
   ];
 
   if (!firestoreLoaded) {
@@ -875,6 +885,11 @@ function App() {
             onUpdateTask={updateTask}
             onEditTask={(id) => setEditingTaskId(id)}
           />
+          ) : viewMode === "calendar" ? (
+            <WeeklyCalendar
+              tasks={tasks}
+              onEditTask={(id) => setEditingTaskId(id)}
+            />
           ) : tasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white py-20 mt-4">
               <button
