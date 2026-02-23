@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Task } from "../types";
 import { todayKey } from "../taskTree";
 
@@ -11,6 +11,7 @@ declare global {
           initTokenClient: (config: {
             client_id: string;
             scope: string;
+            prompt?: string;
             callback: (resp: { access_token?: string; error?: string }) => void;
           }) => { requestAccessToken: () => void };
         };
@@ -31,6 +32,8 @@ interface GoogleCalendarSyncProps {
   onAddTasks: (tasks: Task[]) => void;
   onClose: () => void;
 }
+
+const CONNECTED_KEY = "gcal-connected";
 
 let idCounter = 0;
 function newId() {
@@ -79,6 +82,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
   const [dateRange, setDateRange] = useState({ start: todayKey(), end: nextWeekKey() });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMode, setImportMode] = useState<Record<string, ImportMode>>({});
+  const [autoConnecting, setAutoConnecting] = useState(!!localStorage.getItem(CONNECTED_KEY));
 
   const fetchEvents = useCallback(async (token: string, range: typeof dateRange) => {
     setLoading(true);
@@ -114,6 +118,34 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
     }
   }, []);
 
+  // モーダルを開いた時に自動でトークン取得を試みる
+  useEffect(() => {
+    if (!localStorage.getItem(CONNECTED_KEY)) return;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const timer = setTimeout(() => {
+      if (!clientId || !window.google) {
+        setAutoConnecting(false);
+        return;
+      }
+      window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "https://www.googleapis.com/auth/calendar.readonly",
+        prompt: "",
+        callback: (resp) => {
+          setAutoConnecting(false);
+          if (resp.access_token) {
+            setAccessToken(resp.access_token);
+            fetchEvents(resp.access_token, dateRange);
+          } else {
+            localStorage.removeItem(CONNECTED_KEY);
+          }
+        },
+      }).requestAccessToken();
+    }, 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const signIn = useCallback(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
@@ -129,6 +161,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
       scope: "https://www.googleapis.com/auth/calendar.readonly",
       callback: (resp) => {
         if (resp.access_token) {
+          localStorage.setItem(CONNECTED_KEY, "1");
           setAccessToken(resp.access_token);
           fetchEvents(resp.access_token, dateRange);
         } else {
@@ -232,6 +265,13 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
           {/* 未接続時 */}
           {!accessToken ? (
             <div className="flex flex-col items-center justify-center py-10 gap-4">
+              {autoConnecting ? (
+                <>
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600" />
+                  <p className="text-sm text-gray-400">カレンダーに接続中...</p>
+                </>
+              ) : (
+                <>
               <p className="text-sm text-gray-500">Googleアカウントで認証して予定を取り込みます</p>
               <button
                 onClick={signIn}
@@ -246,6 +286,8 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                 Googleでサインイン
               </button>
               {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+                </>
+              )}
             </div>
           ) : (
             <>
