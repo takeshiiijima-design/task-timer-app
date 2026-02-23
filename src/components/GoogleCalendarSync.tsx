@@ -130,13 +130,14 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
       window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: "https://www.googleapis.com/auth/calendar.readonly",
-        prompt: "",
+        prompt: "none",
         callback: (resp) => {
           setAutoConnecting(false);
           if (resp.access_token) {
             setAccessToken(resp.access_token);
             fetchEvents(resp.access_token, dateRange);
           } else {
+            // サイレント取得失敗 → サインインボタンを表示するだけ（ポップアップ不要）
             localStorage.removeItem(CONNECTED_KEY);
           }
         },
