@@ -225,115 +225,8 @@ export default function TaskEditModal({
         {/* 2カラムコンテンツ */}
         <div className="flex flex-col sm:flex-row flex-1 min-h-0">
 
-          {/* ===== 左カラム: タスク名・メモ・サブタスク ===== */}
-          <div className="flex-1 flex flex-col min-w-0 border-b sm:border-b-0 sm:border-r border-gray-100 overflow-y-auto">
-            <div className="px-6 pt-5 pb-4 space-y-4">
-
-              {/* タスク名 */}
-              {editingTitle ? (
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  defaultValue={task.title}
-                  onBlur={commitTitle}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.nativeEvent.isComposing) commitTitle();
-                    if (e.key === "Escape") setEditingTitle(false);
-                  }}
-                  className="w-full text-lg font-semibold text-gray-900 rounded-xl border border-blue-300 bg-blue-50/20 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                />
-              ) : (
-                <div
-                  onClick={() => setEditingTitle(true)}
-                  className="w-full text-lg font-semibold text-gray-900 rounded-xl px-3 py-2 cursor-text hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all leading-snug"
-                >
-                  {task.title}
-                </div>
-              )}
-
-              {/* メモ */}
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Memo
-                </label>
-                <textarea
-                  value={task.memo ?? ""}
-                  onChange={(e) => onUpdate(task.id, { memo: e.target.value })}
-                  placeholder="メモやコメントを入力..."
-                  rows={4}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 focus:bg-white transition-all resize-y"
-                />
-              </div>
-
-              {/* サブタスク一覧 */}
-              {hasChildren && (
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                    Subtasks ({task.children.length})
-                  </label>
-                  <ul className="space-y-1.5">
-                    {task.children.map((child) => (
-                      <li
-                        key={child.id}
-                        onClick={() => onEditTask(child.id)}
-                        className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 cursor-pointer hover:bg-gray-100/60 hover:border-gray-300 transition-all"
-                      >
-                        <span className={`h-2 w-2 rounded-full shrink-0 ${child.status === "done" ? "bg-green-400" : child.status === "in_progress" ? "bg-blue-400" : "bg-gray-300"}`} />
-                        <span className={`flex-1 text-xs font-medium truncate ${child.status === "done" ? "line-through text-gray-400" : "text-gray-700"}`}>
-                          {child.title}
-                        </span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onToggleTimer(child.id); }}
-                          className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold transition-all ${child.isRunning ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-700"}`}
-                        >
-                          {child.isRunning ? "Stop" : child.elapsedSeconds > 0 ? "Resume" : "Start"}
-                        </button>
-                        <span className="shrink-0 font-mono text-[11px] text-gray-400 tabular-nums">
-                          {formatTime(child.elapsedSeconds)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* サブタスク追加 */}
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Add Subtask
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="サブタスク名"
-                    value={childTitle}
-                    onChange={(e) => setChildTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.nativeEvent.isComposing) handleAddChild();
-                    }}
-                    className="flex-1 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
-                  />
-                  <input
-                    type="number"
-                    placeholder="分"
-                    min={0}
-                    value={childMinutes}
-                    onChange={(e) => setChildMinutes(e.target.value)}
-                    className="w-16 rounded-xl border border-gray-200 bg-white px-2 py-2 text-xs text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
-                  />
-                  <button
-                    onClick={handleAddChild}
-                    className="rounded-xl bg-blue-50 px-3.5 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ===== 右カラム: 属性情報 ===== */}
-          <div className="w-full sm:w-72 sm:shrink-0 overflow-y-auto px-5 py-4 space-y-0 bg-gray-50/30">
+          {/* ===== 左カラム: 属性情報 ===== */}
+          <div className="w-full sm:w-72 sm:shrink-0 overflow-y-auto px-5 py-4 space-y-0 bg-gray-50/30 border-b sm:border-b-0 sm:border-r border-gray-100">
 
             {/* タイマー + 実績時間 */}
             <div className="pb-3 mb-3 border-b border-gray-100">
@@ -569,6 +462,113 @@ export default function TaskEditModal({
                 availableTags={availableTags}
                 onChange={(tags) => onUpdate(task.id, { tags })}
               />
+            </div>
+          </div>
+
+          {/* ===== 右カラム: タスク名・メモ・サブタスク ===== */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+            <div className="px-6 pt-5 pb-4 space-y-4">
+
+              {/* タスク名 */}
+              {editingTitle ? (
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  defaultValue={task.title}
+                  onBlur={commitTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) commitTitle();
+                    if (e.key === "Escape") setEditingTitle(false);
+                  }}
+                  className="w-full text-lg font-semibold text-gray-900 rounded-xl border border-blue-300 bg-blue-50/20 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              ) : (
+                <div
+                  onClick={() => setEditingTitle(true)}
+                  className="w-full text-lg font-semibold text-gray-900 rounded-xl px-3 py-2 cursor-text hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all leading-snug"
+                >
+                  {task.title}
+                </div>
+              )}
+
+              {/* メモ */}
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                  Memo
+                </label>
+                <textarea
+                  value={task.memo ?? ""}
+                  onChange={(e) => onUpdate(task.id, { memo: e.target.value })}
+                  placeholder="メモやコメントを入力..."
+                  rows={4}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 focus:bg-white transition-all resize-y"
+                />
+              </div>
+
+              {/* サブタスク一覧 */}
+              {hasChildren && (
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Subtasks ({task.children.length})
+                  </label>
+                  <ul className="space-y-1.5">
+                    {task.children.map((child) => (
+                      <li
+                        key={child.id}
+                        onClick={() => onEditTask(child.id)}
+                        className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 cursor-pointer hover:bg-gray-100/60 hover:border-gray-300 transition-all"
+                      >
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${child.status === "done" ? "bg-green-400" : child.status === "in_progress" ? "bg-blue-400" : "bg-gray-300"}`} />
+                        <span className={`flex-1 text-xs font-medium truncate ${child.status === "done" ? "line-through text-gray-400" : "text-gray-700"}`}>
+                          {child.title}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onToggleTimer(child.id); }}
+                          className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold transition-all ${child.isRunning ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-700"}`}
+                        >
+                          {child.isRunning ? "Stop" : child.elapsedSeconds > 0 ? "Resume" : "Start"}
+                        </button>
+                        <span className="shrink-0 font-mono text-[11px] text-gray-400 tabular-nums">
+                          {formatTime(child.elapsedSeconds)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* サブタスク追加 */}
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                  Add Subtask
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="サブタスク名"
+                    value={childTitle}
+                    onChange={(e) => setChildTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) handleAddChild();
+                    }}
+                    className="flex-1 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                  />
+                  <input
+                    type="number"
+                    placeholder="分"
+                    min={0}
+                    value={childMinutes}
+                    onChange={(e) => setChildMinutes(e.target.value)}
+                    className="w-16 rounded-xl border border-gray-200 bg-white px-2 py-2 text-xs text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                  />
+                  <button
+                    onClick={handleAddChild}
+                    className="rounded-xl bg-blue-50 px-3.5 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
