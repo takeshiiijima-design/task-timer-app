@@ -14,6 +14,8 @@ export interface Task {
   project: string;
   dueDate: string | null;
   startDate: string | null;
+  /** 開始時刻 "HH:MM" 形式 (Googleカレンダー等から取得) */
+  startTime: string | null;
   children: Task[];
   /** 日別の実績秒数 (キー: "YYYY-MM-DD") */
   dailyLog: Record<string, number>;

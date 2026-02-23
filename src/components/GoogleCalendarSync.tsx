@@ -77,6 +77,14 @@ function getEventDurationMin(event: GCalEvent): number {
   return Math.max(0, Math.round((end - start) / 60000));
 }
 
+function getEventStartTime(event: GCalEvent): string | null {
+  if (!event.start.dateTime) return null;
+  const start = new Date(event.start.dateTime);
+  const h = start.getHours().toString().padStart(2, "0");
+  const m = start.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 function formatEventTime(event: GCalEvent): string {
   if (event.start.date) return "終日";
   const start = new Date(event.start.dateTime ?? "");
@@ -247,6 +255,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
           project: "",
           dueDate: eventDate || null,
           startDate: eventDate || null,
+          startTime: getEventStartTime(e),
           children: [],
           dailyLog: {},
           memo: e.description ?? "",

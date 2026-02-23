@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { Task } from "../types";
 
 interface WeeklyCalendarProps {
@@ -8,22 +8,22 @@ interface WeeklyCalendarProps {
 
 const DAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
 
-const PRIORITY_LEFT_BORDER: Record<string, string> = {
-  high: "border-l-red-400",
-  medium: "border-l-amber-400",
-  low: "border-l-blue-300",
-};
+// 表示する時間帯 (0〜23)
+const HOUR_START = 7;
+const HOUR_END = 23;
+const HOUR_COUNT = HOUR_END - HOUR_START;
+const PX_PER_HOUR = 64; // 1時間あたりのピクセル高さ
 
 const PRIORITY_BG: Record<string, string> = {
-  high: "bg-red-50",
-  medium: "bg-white",
-  low: "bg-blue-50",
+  high: "bg-red-100 border-red-300",
+  medium: "bg-blue-100 border-blue-300",
+  low: "bg-gray-100 border-gray-300",
 };
 
-const STATUS_LABEL: Record<string, { text: string; className: string }> = {
-  todo: { text: "未着手", className: "text-gray-400" },
-  in_progress: { text: "進行中", className: "text-indigo-500" },
-  done: { text: "完了", className: "text-green-500" },
+const PRIORITY_TEXT: Record<string, string> = {
+  high: "text-red-700",
+  medium: "text-blue-700",
+  low: "text-gray-600",
 };
 
 function flattenTasks(tasks: Task[]): Task[] {
@@ -48,10 +48,39 @@ function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** "HH:MM" → 時刻グリッド上のtop位置(px) */
+function timeToTop(timeStr: string): number {
+  const [h, m] = timeStr.split(":").map(Number);
+  const totalMin = (h - HOUR_START) * 60 + m;
+  return (totalMin / 60) * PX_PER_HOUR;
+}
+
+/** 分数 → ピクセル高さ */
+function durationToHeight(minutes: number): number {
+  return Math.max((minutes / 60) * PX_PER_HOUR, 20);
+}
+
 export default function WeeklyCalendar({ tasks, onEditTask }: WeeklyCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset]);
   const today = toDateStr(new Date());
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 現在時刻ライン用
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // マウント時・週変更時に現在時刻付近にスクロール
+  useEffect(() => {
+    if (scrollRef.current) {
+      const now = new Date();
+      const top = timeToTop(`${now.getHours()}:${now.getMinutes()}`);
+      scrollRef.current.scrollTop = Math.max(0, top - PX_PER_HOUR * 1.5);
+    }
+  }, [weekOffset]);
 
   const allTasks = useMemo(() => {
     const now = Date.now();
@@ -61,13 +90,18 @@ export default function WeeklyCalendar({ tasks, onEditTask }: WeeklyCalendarProp
     );
   }, [tasks]);
 
+  // 日付ごとのタスク（開始時刻あり → 時刻グリッド、なし → 終日エリア）
   const tasksByDate = useMemo(() => {
-    const map: Record<string, Task[]> = {};
+    const map: Record<string, { timed: Task[]; allDay: Task[] }> = {};
     for (const task of allTasks) {
       const date = task.dueDate ?? task.startDate;
       if (!date) continue;
-      if (!map[date]) map[date] = [];
-      map[date].push(task);
+      if (!map[date]) map[date] = { timed: [], allDay: [] };
+      if (task.startTime) {
+        map[date].timed.push(task);
+      } else {
+        map[date].allDay.push(task);
+      }
     }
     return map;
   }, [allTasks]);
@@ -76,11 +110,6 @@ export default function WeeklyCalendar({ tasks, onEditTask }: WeeklyCalendarProp
     () => allTasks.filter((t) => !t.dueDate && !t.startDate && t.status !== "done"),
     [allTasks]
   );
-
-  const weekTaskCount = useMemo(() => {
-    const weekKeys = weekDays.map(toDateStr);
-    return weekKeys.reduce((sum, k) => sum + (tasksByDate[k]?.length ?? 0), 0);
-  }, [weekDays, tasksByDate]);
 
   const weekLabel = (() => {
     const s = weekDays[0];
@@ -91,10 +120,19 @@ export default function WeeklyCalendar({ tasks, onEditTask }: WeeklyCalendarProp
     return `${s.getFullYear()}年${s.getMonth() + 1}月${s.getDate()}日〜${e.getMonth() + 1}月${e.getDate()}日`;
   })();
 
+  // 現在時刻ラインのtop
+  const nowTop = (() => {
+    const h = currentTime.getHours();
+    const m = currentTime.getMinutes();
+    if (h < HOUR_START || h >= HOUR_END) return null;
+    return timeToTop(`${h}:${m}`);
+  })();
+
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col h-full gap-0">
       {/* ナビゲーションヘッダー */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 pb-2">
         <button
           onClick={() => setWeekOffset((o) => o - 1)}
           className="rounded-lg border border-gray-200 bg-white p-1.5 hover:bg-gray-50 transition-all"
@@ -122,142 +160,175 @@ export default function WeeklyCalendar({ tasks, onEditTask }: WeeklyCalendarProp
         )}
       </div>
 
-      {/* カレンダーグリッド */}
-      <div className="overflow-x-auto">
-        <div className="grid grid-cols-7 gap-2 min-w-[560px] min-h-[500px]">
+      {/* カレンダー本体 */}
+      <div className="flex flex-col flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
+
+        {/* 曜日ヘッダー */}
+        <div className="flex shrink-0 border-b border-gray-100">
+          {/* 時刻列の幅分のスペーサー */}
+          <div className="w-10 shrink-0" />
           {weekDays.map((date, i) => {
             const dateKey = toDateStr(date);
             const isToday = dateKey === today;
-            const isPast = dateKey < today;
-            const dayTasks = tasksByDate[dateKey] ?? [];
             const isSat = i === 5;
             const isSun = i === 6;
-
+            const allDayTasks = tasksByDate[dateKey]?.allDay ?? [];
             return (
-              <div key={dateKey} className="flex flex-col">
-                {/* 日付ヘッダー */}
-                <div
-                  className={`flex flex-col items-center py-2 mb-2 rounded-xl ${
-                    isToday
-                      ? "bg-indigo-600"
-                      : isPast
-                      ? "bg-gray-50"
-                      : isSat
-                      ? "bg-blue-50"
-                      : isSun
-                      ? "bg-rose-50"
-                      : "bg-gray-100"
-                  }`}
-                >
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isToday
-                        ? "text-indigo-200"
-                        : isSat
-                        ? "text-blue-400"
-                        : isSun
-                        ? "text-rose-400"
-                        : "text-gray-400"
-                    }`}
-                  >
+              <div key={dateKey} className="flex-1 border-l border-gray-100 min-w-0">
+                {/* 日付 */}
+                <div className={`flex flex-col items-center py-1.5 ${isToday ? "bg-indigo-50" : ""}`}>
+                  <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                    isToday ? "text-indigo-400" : isSat ? "text-blue-400" : isSun ? "text-rose-400" : "text-gray-400"
+                  }`}>
                     {DAY_LABELS[i]}
                   </span>
-                  <span
-                    className={`text-base font-bold leading-tight ${
-                      isToday
-                        ? "text-white"
-                        : isPast
-                        ? "text-gray-400"
-                        : isSat
-                        ? "text-blue-600"
-                        : isSun
-                        ? "text-rose-500"
-                        : "text-gray-700"
-                    }`}
-                  >
+                  <span className={`text-base font-bold leading-tight ${
+                    isToday
+                      ? "flex items-center justify-center h-7 w-7 rounded-full bg-indigo-600 text-white"
+                      : isSat ? "text-blue-600" : isSun ? "text-rose-500" : "text-gray-700"
+                  }`}>
                     {date.getDate()}
                   </span>
-                  {dayTasks.length > 0 && (
-                    <span
-                      className={`text-[9px] font-semibold mt-0.5 ${
-                        isToday ? "text-indigo-200" : "text-gray-400"
-                      }`}
-                    >
-                      {dayTasks.length}件
-                    </span>
-                  )}
                 </div>
-
-                {/* タスクリスト */}
-                <div className="space-y-1.5">
-                  {dayTasks.map((task) => (
-                    <button
-                      key={task.id}
-                      onClick={() => onEditTask(task.id)}
-                      className={`w-full text-left rounded-lg border-l-2 border border-gray-100 pl-2 pr-1.5 py-1.5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${
-                        PRIORITY_LEFT_BORDER[task.priority]
-                      } ${PRIORITY_BG[task.priority]} ${
-                        task.status === "done" ? "opacity-50" : ""
-                      }`}
-                    >
-                      <p
-                        className={`text-[11px] font-semibold leading-snug line-clamp-2 ${
-                          task.status === "done"
-                            ? "line-through text-gray-400"
-                            : "text-gray-800"
-                        }`}
+                {/* 終日タスク */}
+                {allDayTasks.length > 0 && (
+                  <div className="px-0.5 pb-1 space-y-0.5 border-t border-gray-100">
+                    {allDayTasks.map((task) => (
+                      <button
+                        key={task.id}
+                        onClick={() => onEditTask(task.id)}
+                        className={`w-full text-left rounded px-1 py-0.5 text-[9px] font-semibold truncate border ${
+                          PRIORITY_BG[task.priority]
+                        } ${PRIORITY_TEXT[task.priority]} ${task.status === "done" ? "opacity-50 line-through" : ""}`}
                       >
                         {task.title}
-                      </p>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span
-                          className={`text-[9px] font-medium ${
-                            STATUS_LABEL[task.status]?.className ?? "text-gray-400"
-                          }`}
-                        >
-                          {STATUS_LABEL[task.status]?.text ?? ""}
-                        </span>
-                        {task.estimatedMinutes > 0 && (
-                          <span className="text-[9px] text-gray-300 ml-auto">
-                            {task.estimatedMinutes}m
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-      </div>
 
-      {/* この週にタスクがない場合のヒント */}
-      {weekTaskCount === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-white px-5 py-6 text-center">
-          <p className="text-xs font-medium text-gray-400">この週に期日・開始日が設定されたタスクはありません</p>
-          <p className="text-[10px] text-gray-300 mt-1">タスクの編集モーダルで「期日」を設定するか、Googleカレンダーから取り込んでください</p>
+        {/* スクロール可能な時刻グリッド */}
+        <div ref={scrollRef} className="flex flex-1 overflow-y-auto overflow-x-hidden">
+          {/* 時刻ラベル列 */}
+          <div className="w-10 shrink-0 relative">
+            {Array.from({ length: HOUR_COUNT }, (_, i) => {
+              const hour = HOUR_START + i;
+              return (
+                <div
+                  key={hour}
+                  style={{ height: PX_PER_HOUR }}
+                  className="flex items-start justify-end pr-1.5 pt-0.5"
+                >
+                  <span className="text-[9px] text-gray-300 leading-none">
+                    {hour}:00
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 日別列 */}
+          <div className="flex flex-1 relative min-w-0">
+            {weekDays.map((date) => {
+              const dateKey = toDateStr(date);
+              const isToday = dateKey === today;
+              const timedTasks = tasksByDate[dateKey]?.timed ?? [];
+
+              return (
+                <div
+                  key={dateKey}
+                  className={`flex-1 border-l border-gray-100 relative min-w-0 ${isToday ? "bg-indigo-50/20" : ""}`}
+                  style={{ height: HOUR_COUNT * PX_PER_HOUR }}
+                >
+                  {/* 時間の横罫線 */}
+                  {Array.from({ length: HOUR_COUNT }, (_, hi) => (
+                    <div
+                      key={hi}
+                      className="absolute left-0 right-0 border-t border-gray-100"
+                      style={{ top: hi * PX_PER_HOUR }}
+                    />
+                  ))}
+                  {/* 30分罫線 */}
+                  {Array.from({ length: HOUR_COUNT }, (_, hi) => (
+                    <div
+                      key={`h-${hi}`}
+                      className="absolute left-0 right-0 border-t border-gray-50"
+                      style={{ top: hi * PX_PER_HOUR + PX_PER_HOUR / 2 }}
+                    />
+                  ))}
+
+                  {/* 現在時刻ライン（今日の列のみ） */}
+                  {isToday && nowTop !== null && (
+                    <div
+                      className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
+                      style={{ top: nowTop }}
+                    >
+                      <div className="h-2 w-2 rounded-full bg-red-500 -ml-1 shrink-0" />
+                      <div className="flex-1 h-px bg-red-400" />
+                    </div>
+                  )}
+
+                  {/* 時刻付きタスク */}
+                  {timedTasks.map((task) => {
+                    const top = timeToTop(task.startTime!);
+                    const height = durationToHeight(task.estimatedMinutes);
+                    const isShort = height <= 28;
+                    return (
+                      <button
+                        key={task.id}
+                        onClick={() => onEditTask(task.id)}
+                        className={`absolute left-0.5 right-0.5 z-10 rounded border text-left overflow-hidden transition-all hover:brightness-95 hover:z-20 hover:shadow-md ${
+                          PRIORITY_BG[task.priority]
+                        } ${task.status === "done" ? "opacity-50" : ""}`}
+                        style={{ top, height }}
+                      >
+                        <div className={`px-1 ${isShort ? "py-0" : "py-0.5"}`}>
+                          <p className={`font-semibold leading-tight truncate ${PRIORITY_TEXT[task.priority]} ${
+                            isShort ? "text-[9px]" : "text-[10px]"
+                          } ${task.status === "done" ? "line-through" : ""}`}>
+                            {task.startTime} {task.title}
+                          </p>
+                          {!isShort && task.estimatedMinutes > 0 && (
+                            <p className="text-[8px] text-gray-400 leading-none mt-0.5">
+                              {task.estimatedMinutes}分
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+          </div>
         </div>
-      )}
+      </div>
 
       {/* 日付未設定タスク */}
       {noDateTasks.length > 0 && (
-        <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+        <div className="shrink-0 mt-2 rounded-xl border border-gray-100 bg-white px-4 py-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
             日付未設定 ({noDateTasks.length}件)
           </p>
-          <div className="space-y-1.5">
-            {noDateTasks.slice(0, 5).map((task) => (
+          <div className="flex flex-wrap gap-1.5">
+            {noDateTasks.slice(0, 8).map((task) => (
               <button
                 key={task.id}
                 onClick={() => onEditTask(task.id)}
-                className={`w-full text-left rounded-lg border-l-2 border border-gray-100 pl-2 pr-1.5 py-1.5 shadow-sm transition-all hover:shadow-md ${PRIORITY_LEFT_BORDER[task.priority]} ${PRIORITY_BG[task.priority]}`}
+                className={`rounded-lg border px-2 py-1 text-[10px] font-semibold truncate max-w-[140px] ${
+                  PRIORITY_BG[task.priority]
+                } ${PRIORITY_TEXT[task.priority]}`}
               >
-                <p className="text-[11px] font-semibold text-gray-700 truncate">{task.title}</p>
+                {task.title}
               </button>
             ))}
-            {noDateTasks.length > 5 && (
-              <p className="text-[10px] text-gray-400 text-center">他 {noDateTasks.length - 5}件...</p>
+            {noDateTasks.length > 8 && (
+              <span className="text-[10px] text-gray-400 self-center">他 {noDateTasks.length - 8}件...</span>
             )}
           </div>
         </div>
