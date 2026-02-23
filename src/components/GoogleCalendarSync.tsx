@@ -124,6 +124,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
   const [autoConnecting, setAutoConnecting] = useState(
     () => !getCachedToken() && !!localStorage.getItem(CONNECTED_KEY)
   );
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset]);
@@ -245,9 +246,12 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
     });
   };
 
-  const cycleMode = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setImportMode(prev => ({ ...prev, [id]: prev[id] === "task" ? "mtg" : "task" }));
+  const handleEventClick = (id: string) => {
+    setActiveEventId(prev => prev === id ? null : id);
+  };
+
+  const setMode = (id: string, mode: ImportMode) => {
+    setImportMode(prev => ({ ...prev, [id]: mode }));
   };
 
   // 日付ごとのイベント分類
@@ -523,12 +527,15 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                               const height = durationToHeight(getEventDurationMin(ev));
                               const isSel = selected.has(ev.id);
                               const mode = importMode[ev.id] ?? "task";
+                              const isActive = activeEventId === ev.id;
                               const isShort = height <= 28;
                               return (
                                 <div
                                   key={ev.id}
-                                  onClick={() => toggleSelect(ev.id)}
+                                  onClick={() => handleEventClick(ev.id)}
                                   className={`absolute left-0.5 right-0.5 z-10 rounded overflow-hidden cursor-pointer transition-all hover:brightness-95 ${
+                                    isActive ? "ring-2 ring-offset-1 ring-gray-700 z-20" : ""
+                                  } ${
                                     isSel
                                       ? mode === "mtg"
                                         ? "bg-violet-500 border border-violet-400"
@@ -537,21 +544,12 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                                   }`}
                                   style={{ top, height }}
                                 >
-                                  <div className={`flex items-start gap-0.5 px-1 ${isShort ? "pt-0" : "pt-0.5"} h-full`}>
-                                    <p className={`flex-1 min-w-0 font-semibold leading-tight ${
+                                  <div className={`px-1 ${isShort ? "pt-0" : "pt-0.5"} h-full`}>
+                                    <p className={`font-semibold leading-tight ${
                                       isShort ? "text-[8px] truncate" : "text-[9px] line-clamp-2"
                                     } ${isSel ? "text-white" : "text-gray-500"}`}>
                                       {startTime} {ev.summary}
                                     </p>
-                                    {isSel && height >= 26 && (
-                                      <button
-                                        onClick={e => cycleMode(ev.id, e)}
-                                        title={mode === "task" ? "クリックしてMTGに変更" : "クリックしてタスクに変更"}
-                                        className="shrink-0 text-[8px] font-bold bg-white/25 hover:bg-white/40 rounded px-0.5 leading-none text-white transition-colors"
-                                      >
-                                        {mode === "task" ? "T" : "M"}
-                                      </button>
-                                    )}
                                   </div>
                                 </div>
                               );
@@ -565,18 +563,89 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
               </div>
             </div>
 
+            {/* イベント設定パネル */}
+            {activeEventId && (() => {
+              const ev = events.find(e => e.id === activeEventId);
+              if (!ev) return null;
+              const isSel = selected.has(ev.id);
+              const mode = importMode[ev.id] ?? "task";
+              const duration = getEventDurationMin(ev);
+              return (
+                <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 space-y-2.5">
+                  {/* イベント情報 */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate">{ev.summary}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {getEventDate(ev)}　{getEventStartTime(ev) ?? "終日"}
+                        {duration > 0 && `　${duration}分`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActiveEventId(null)}
+                      className="shrink-0 h-6 w-6 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-all"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  {/* 取り込む / スキップ */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { if (!isSel) toggleSelect(ev.id); }}
+                      className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
+                        isSel ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      取り込む
+                    </button>
+                    <button
+                      onClick={() => { if (isSel) toggleSelect(ev.id); }}
+                      className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
+                        !isSel ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      スキップ
+                    </button>
+                  </div>
+                  {/* タスク / MTG（取り込む選択時のみ） */}
+                  {isSel && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setMode(ev.id, "task")}
+                        className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
+                          mode === "task" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        タスクに追加
+                      </button>
+                      <button
+                        onClick={() => setMode(ev.id, "mtg")}
+                        className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
+                          mode === "mtg" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        MTGとして記録
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* 凡例 */}
             <div className="shrink-0 flex items-center gap-4 px-4 py-1.5 border-t border-gray-100 bg-gray-50/40">
               <div className="flex items-center gap-1.5">
                 <div className="h-2.5 w-2.5 rounded bg-blue-500" />
-                <span className="text-[10px] text-gray-500">タスクに追加</span>
+                <span className="text-[10px] text-gray-500">タスク</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="h-2.5 w-2.5 rounded bg-violet-500" />
-                <span className="text-[10px] text-gray-500">MTGとして記録</span>
+                <span className="text-[10px] text-gray-500">MTG</span>
               </div>
               <span className="text-[10px] text-gray-400 ml-auto hidden sm:block">
-                クリックで選択/解除 · T/Mでモード切替
+                予定をタップして設定
               </span>
             </div>
           </div>
