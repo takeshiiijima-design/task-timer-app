@@ -14,6 +14,8 @@ interface TaskCardProps {
   onUpdate: (id: number, patch: Partial<Task>) => void;
   onClick: (task: Task) => void;
   formatTime: (seconds: number) => string;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
 }
 
 /** 期限を絶対日付で表示（今日のみ「今日」） */
@@ -79,6 +81,8 @@ export default function TaskCard({
   onUpdate,
   onClick,
   formatTime,
+  selectedIds,
+  onToggleSelect,
 }: TaskCardProps) {
   const [showChildren, setShowChildren] = useState(false);
   const [editingDueDate, setEditingDueDate] = useState(false);
@@ -119,15 +123,31 @@ export default function TaskCard({
     setEditingEstimate(false);
   };
 
+  const isSelected = selectedIds?.has(task.id) ?? false;
+
   return (
     <li className="list-none">
       <div
         onClick={() => onClick(task)}
         className={`group flex items-center h-10 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
           task.isRunning ? "bg-blue-50/40" : ""
-        } ${task.status === "done" ? "opacity-60" : ""}`}
+        } ${task.status === "done" ? "opacity-60" : ""} ${
+          isSelected ? "bg-indigo-50/60" : ""
+        }`}
         style={{ paddingLeft: depth > 0 ? `${depth * 24 + 12}px` : "12px" }}
       >
+        {/* チェックボックス（一括選択モード時） */}
+        {onToggleSelect && (
+          <div className="w-6 shrink-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect(task.id)}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 cursor-pointer"
+            />
+          </div>
+        )}
+
         {/* 展開ボタン + ステータスドット */}
         <div className="w-7 shrink-0 flex items-center justify-center">
           {hasChildren ? (
@@ -335,6 +355,8 @@ export default function TaskCard({
               onUpdate={onUpdate}
               onClick={onClick}
               formatTime={formatTime}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </ul>

@@ -206,7 +206,8 @@ export default function TimesheetDashboard({
           for (const day of weekDays) weekTotal += seconds[day] || 0;
           return { label, seconds, weekTotal, totalElapsed: total, estimatedSeconds: est };
         })
-        .filter((r) => r.weekTotal > 0);
+        .filter((r) => r.weekTotal > 0 || r.totalElapsed > 0)
+        .sort((a, b) => b.weekTotal - a.weekTotal);
     }
 
     // groupBy === "tag"
@@ -233,7 +234,8 @@ export default function TimesheetDashboard({
         for (const day of weekDays) weekTotal += seconds[day] || 0;
         return { label, seconds, weekTotal, totalElapsed: total, estimatedSeconds: est };
       })
-      .filter((r) => r.weekTotal > 0);
+      .filter((r) => r.weekTotal > 0 || r.totalElapsed > 0)
+      .sort((a, b) => b.weekTotal - a.weekTotal);
   }, [allTasks, weekDays, groupBy]);
 
   // --- 列合計 ---

@@ -664,7 +664,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
               disabled={selected.size === 0}
               className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm shadow-blue-200 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
-              選択した予定を取り込む
+              選択した予定（{selected.size}件）を取り込む
             </button>
           </div>
         )}

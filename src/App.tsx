@@ -117,6 +117,9 @@ function App() {
   const [sortKey, setSortKey] = useState<SortKey>("created");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [firestoreLoaded, setFirestoreLoaded] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
+  const [showBulkProject, setShowBulkProject] = useState(false);
+  const [showBulkTag, setShowBulkTag] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSaveRef = useRef(false);
@@ -300,6 +303,42 @@ function App() {
 
   const deleteTag = (name: string) => {
     setTasks((prev) => removeTagFromTree(prev, name));
+  };
+
+  // --- 一括操作 ---
+  const toggleBulkSelect = (id: number) => {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkDelete = () => {
+    if (!window.confirm(`選択した${bulkSelected.size}件のタスクを削除しますか？`)) return;
+    const ids = [...bulkSelected];
+    setTasks((prev) => ids.reduce((acc, id) => deleteTaskInTree(acc, id), prev));
+    setBulkSelected(new Set());
+    setShowBulkProject(false);
+    setShowBulkTag(false);
+  };
+
+  const bulkSetProject = (project: string) => {
+    bulkSelected.forEach((id) => updateTask(id, { project }));
+    setBulkSelected(new Set());
+    setShowBulkProject(false);
+  };
+
+  const bulkAddTag = (tag: string) => {
+    bulkSelected.forEach((id) => {
+      const task = findTaskInTree(tasks, id);
+      if (task && !task.tags.includes(tag)) {
+        updateTask(id, { tags: [...task.tags, tag] });
+      }
+    });
+    setBulkSelected(new Set());
+    setShowBulkTag(false);
   };
 
   // --- データインポート ---
@@ -921,6 +960,8 @@ function App() {
                         onUpdate={updateTask}
                         onClick={(t) => setEditingTaskId(t.id)}
                         formatTime={formatTime}
+                        selectedIds={bulkSelected}
+                        onToggleSelect={toggleBulkSelect}
                       />
                     ))}
                     {/* 合計サマリー */}
@@ -942,6 +983,76 @@ function App() {
             </>
           )}
         </main>
+
+        {/* ===== 一括操作フローティングバー ===== */}
+        {bulkSelected.size > 0 && (
+          <div className="fixed bottom-16 md:bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-2xl bg-gray-900 text-white shadow-2xl px-4 py-2.5 text-xs font-semibold">
+            <span className="text-gray-300 mr-1">{bulkSelected.size}件選択中</span>
+
+            {/* プロジェクト変更 */}
+            <div className="relative">
+              <button
+                onClick={() => { setShowBulkProject(!showBulkProject); setShowBulkTag(false); }}
+                className="flex items-center gap-1 rounded-lg bg-gray-700 hover:bg-gray-600 px-2.5 py-1.5 transition-colors"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                PJ変更
+              </button>
+              {showBulkProject && (
+                <div className="absolute bottom-full mb-2 left-0 rounded-xl bg-white shadow-xl border border-gray-200 py-1 min-w-[160px] z-40">
+                  <button onClick={() => bulkSetProject("")} className="block w-full px-3.5 py-2 text-left text-xs text-gray-400 hover:bg-gray-50">なし</button>
+                  {availableProjects.map((p) => (
+                    <button key={p} onClick={() => bulkSetProject(p)} className="block w-full px-3.5 py-2 text-left text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-600">{p}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* タグ追加 */}
+            <div className="relative">
+              <button
+                onClick={() => { setShowBulkTag(!showBulkTag); setShowBulkProject(false); }}
+                className="flex items-center gap-1 rounded-lg bg-gray-700 hover:bg-gray-600 px-2.5 py-1.5 transition-colors"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2z" />
+                </svg>
+                タグ追加
+              </button>
+              {showBulkTag && (
+                <div className="absolute bottom-full mb-2 left-0 rounded-xl bg-white shadow-xl border border-gray-200 py-1 min-w-[160px] z-40">
+                  {availableTags.map((tag) => (
+                    <button key={tag} onClick={() => bulkAddTag(tag)} className="block w-full px-3.5 py-2 text-left text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-600">{tag}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 削除 */}
+            <button
+              onClick={bulkDelete}
+              className="flex items-center gap-1 rounded-lg bg-red-600 hover:bg-red-500 px-2.5 py-1.5 transition-colors"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              削除
+            </button>
+
+            {/* 選択解除 */}
+            <button
+              onClick={() => { setBulkSelected(new Set()); setShowBulkProject(false); setShowBulkTag(false); }}
+              className="flex items-center justify-center h-6 w-6 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors ml-1"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* モバイルボトムナビ（fixed で常に表示） */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 flex items-stretch bg-white border-t border-gray-200">
           {navItems.map((item) => (

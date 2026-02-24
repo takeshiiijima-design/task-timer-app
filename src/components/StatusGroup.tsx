@@ -10,6 +10,8 @@ interface StatusGroupProps {
   onUpdate: (id: number, patch: Partial<Task>) => void;
   onClick: (task: Task) => void;
   formatTime: (seconds: number) => string;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
 }
 
 const GROUP_CONFIG: Record<TaskStatus, { label: string; color: string; dotColor: string; bgColor: string }> = {
@@ -41,6 +43,8 @@ export default function StatusGroup({
   onUpdate,
   onClick,
   formatTime,
+  selectedIds,
+  onToggleSelect,
 }: StatusGroupProps) {
   const [collapsed, setCollapsed] = useState(false);
   const config = GROUP_CONFIG[status];
@@ -71,6 +75,7 @@ export default function StatusGroup({
         <div className="border border-gray-100 border-t-0 rounded-b-lg bg-white overflow-hidden">
           {/* カラムヘッダー */}
           <div className="flex items-center h-7 px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-gray-50/50">
+            {onToggleSelect && <div className="w-6 shrink-0" />}
             <div className="w-7 shrink-0" />
             <div className="flex-1 min-w-0">タスク名</div>
             <div className="shrink-0 w-[72px] text-center">状態</div>
@@ -93,6 +98,8 @@ export default function StatusGroup({
                 onUpdate={onUpdate}
                 onClick={onClick}
                 formatTime={formatTime}
+                selectedIds={selectedIds}
+                onToggleSelect={onToggleSelect}
               />
             ))}
           </ul>
