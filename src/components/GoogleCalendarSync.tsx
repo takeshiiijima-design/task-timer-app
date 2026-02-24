@@ -110,7 +110,8 @@ function durationToHeight(minutes: number): number {
   return Math.max((minutes / 60) * PX_PER_HOUR, 18);
 }
 
-type ImportMode = "task" | "mtg";
+// 各予定の取り込み状態
+type EventStatus = "imported-task" | "imported-mtg" | "skipped";
 
 // ── メインコンポーネント ────────────────────────────────
 export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalendarSyncProps) {
@@ -119,8 +120,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [importMode, setImportMode] = useState<Record<string, ImportMode>>({});
+  const [eventStatus, setEventStatus] = useState<Record<string, EventStatus>>({});
   const [autoConnecting, setAutoConnecting] = useState(
     () => !getCachedToken() && !!localStorage.getItem(CONNECTED_KEY)
   );
@@ -154,10 +154,8 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
       const data = await res.json();
       const items: GCalEvent[] = (data.items ?? []).filter((e: GCalEvent) => e.summary);
       setEvents(items);
-      setSelected(new Set(items.map((e: GCalEvent) => e.id)));
-      const modes: Record<string, ImportMode> = {};
-      items.forEach((e: GCalEvent) => { modes[e.id] = "task"; });
-      setImportMode(modes);
+      setEventStatus({});
+      setActiveEventId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "取得に失敗しました");
     } finally {
@@ -233,25 +231,49 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
     }).requestAccessToken();
   }, [weekDays, fetchEvents]);
 
-  // ── イベント操作 ──────────────────────────────────────
-  const toggleSelect = (id: string) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else {
-        next.add(id);
-        if (!importMode[id]) setImportMode(m => ({ ...m, [id]: "task" }));
-      }
-      return next;
-    });
+  // ── 即時取り込み ──────────────────────────────────────
+  const importEvent = (ev: GCalEvent, mode: "task" | "mtg") => {
+    const eventDate = getEventDate(ev);
+    const durationMin = getEventDurationMin(ev);
+    const durationSec = durationMin * 60;
+    const base: Task = {
+      id: newId(),
+      title: ev.summary,
+      estimatedMinutes: durationMin,
+      elapsedSeconds: 0,
+      isRunning: false,
+      startedAt: null,
+      status: "todo",
+      tags: [],
+      priority: "medium",
+      project: "",
+      dueDate: eventDate || null,
+      startDate: eventDate || null,
+      startTime: getEventStartTime(ev),
+      children: [],
+      dailyLog: {},
+      memo: ev.description ?? "",
+      archivedAt: null,
+    };
+    if (mode === "mtg") {
+      onAddTasks([{
+        ...base,
+        status: "done",
+        elapsedSeconds: durationSec,
+        dailyLog: eventDate ? { [eventDate]: durationSec } : {},
+        archivedAt: new Date().toISOString(),
+      }]);
+      setEventStatus(prev => ({ ...prev, [ev.id]: "imported-mtg" }));
+    } else {
+      onAddTasks([base]);
+      setEventStatus(prev => ({ ...prev, [ev.id]: "imported-task" }));
+    }
+    setActiveEventId(null);
   };
 
-  const handleEventClick = (id: string) => {
-    setActiveEventId(prev => prev === id ? null : id);
-  };
-
-  const setMode = (id: string, mode: ImportMode) => {
-    setImportMode(prev => ({ ...prev, [id]: mode }));
+  const skipEvent = (id: string) => {
+    setEventStatus(prev => ({ ...prev, [id]: "skipped" }));
+    setActiveEventId(null);
   };
 
   // 日付ごとのイベント分類
@@ -275,47 +297,8 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
     return `${s.getFullYear()}年${s.getMonth() + 1}月${s.getDate()}日〜${e.getMonth() + 1}月${e.getDate()}日`;
   })();
 
-  // ── 取り込み ──────────────────────────────────────────
-  const handleImport = () => {
-    const tasks: Task[] = [];
-    events.filter(e => selected.has(e.id)).forEach(e => {
-      const mode = importMode[e.id] ?? "task";
-      const eventDate = getEventDate(e);
-      const durationMin = getEventDurationMin(e);
-      const durationSec = durationMin * 60;
-      const base: Task = {
-        id: newId(),
-        title: e.summary,
-        estimatedMinutes: durationMin,
-        elapsedSeconds: 0,
-        isRunning: false,
-        startedAt: null,
-        status: "todo",
-        tags: [],
-        priority: "medium",
-        project: "",
-        dueDate: eventDate || null,
-        startDate: eventDate || null,
-        startTime: getEventStartTime(e),
-        children: [],
-        dailyLog: {},
-        memo: e.description ?? "",
-        archivedAt: null,
-      };
-      if (mode === "mtg") {
-        tasks.push({ ...base, status: "done", elapsedSeconds: durationSec,
-          dailyLog: eventDate ? { [eventDate]: durationSec } : {},
-          archivedAt: new Date().toISOString() });
-      } else {
-        tasks.push(base);
-      }
-    });
-    if (tasks.length > 0) onAddTasks(tasks);
-    onClose();
-  };
-
-  const taskCount = [...selected].filter(id => (importMode[id] ?? "task") === "task").length;
-  const mtgCount = [...selected].filter(id => importMode[id] === "mtg").length;
+  // 取り込み済みカウント
+  const importedCount = Object.values(eventStatus).filter(s => s !== "skipped").length;
 
   // ── 現在時刻ライン ────────────────────────────────────
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -328,6 +311,16 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
     if (h < HOUR_START || h >= HOUR_END) return null;
     return timeToTop(`${h}:${m}`);
   })();
+
+  // イベントの表示スタイルを返す
+  function getEventStyle(id: string) {
+    const st = eventStatus[id];
+    if (st === "imported-task") return { bg: "bg-blue-500 border border-blue-400", text: "text-white", dim: false };
+    if (st === "imported-mtg") return { bg: "bg-violet-500 border border-violet-400", text: "text-white", dim: false };
+    if (st === "skipped") return { bg: "bg-gray-200 border border-gray-300", text: "text-gray-400", dim: true };
+    // neutral
+    return { bg: "bg-gray-100 border border-gray-200", text: "text-gray-500", dim: false };
+  }
 
   // ── レンダリング ──────────────────────────────────────
   return (
@@ -420,10 +413,10 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
 
             {error && <p className="text-xs text-red-500 px-4 py-1 shrink-0">{error}</p>}
 
-            {/* カレンダーグリッド（横スクロール対応） */}
+            {/* カレンダーグリッド */}
             <div className="flex flex-col flex-1 overflow-hidden">
               <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-                {/* 曜日ヘッダー（横スクロール同期） */}
+                {/* 曜日ヘッダー */}
                 <div className="overflow-x-hidden shrink-0">
                   <div className="flex border-b border-gray-100" style={{ minWidth: 480 }}>
                     <div className="w-8 shrink-0" />
@@ -449,17 +442,15 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                           {allDayEvs.length > 0 && (
                             <div className="px-0.5 pb-1 space-y-0.5 border-t border-gray-100">
                               {allDayEvs.map(ev => {
-                                const isSel = selected.has(ev.id);
-                                const mode = importMode[ev.id] ?? "task";
+                                const style = getEventStyle(ev.id);
+                                const isActive = activeEventId === ev.id;
                                 return (
                                   <div
                                     key={ev.id}
-                                    onClick={() => toggleSelect(ev.id)}
-                                    className={`rounded px-1 py-0.5 text-[9px] font-semibold truncate cursor-pointer transition-all ${
-                                      isSel
-                                        ? mode === "mtg" ? "bg-violet-500 text-white" : "bg-blue-500 text-white"
-                                        : "bg-gray-200 text-gray-400"
-                                    }`}
+                                    onClick={() => setActiveEventId(prev => prev === ev.id ? null : ev.id)}
+                                    className={`rounded px-1 py-0.5 text-[9px] font-semibold truncate cursor-pointer transition-all ${style.bg} ${style.text} ${
+                                      style.dim ? "opacity-40" : ""
+                                    } ${isActive ? "ring-1 ring-gray-700" : ""}`}
                                   >
                                     {ev.summary}
                                   </div>
@@ -473,7 +464,7 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                   </div>
                 </div>
 
-                {/* 時刻グリッド（スクロール可能） */}
+                {/* 時刻グリッド */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-auto">
                   <div className="flex" style={{ minWidth: 480 }}>
                     {/* 時刻軸 */}
@@ -525,29 +516,29 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                               if (startHour < HOUR_START || startHour >= HOUR_END) return null;
                               const top = timeToTop(startTime);
                               const height = durationToHeight(getEventDurationMin(ev));
-                              const isSel = selected.has(ev.id);
-                              const mode = importMode[ev.id] ?? "task";
+                              const style = getEventStyle(ev.id);
                               const isActive = activeEventId === ev.id;
                               const isShort = height <= 28;
+                              const st = eventStatus[ev.id];
                               return (
                                 <div
                                   key={ev.id}
-                                  onClick={() => handleEventClick(ev.id)}
+                                  onClick={() => setActiveEventId(prev => prev === ev.id ? null : ev.id)}
                                   className={`absolute left-0.5 right-0.5 z-10 rounded overflow-hidden cursor-pointer transition-all hover:brightness-95 ${
                                     isActive ? "ring-2 ring-offset-1 ring-gray-700 z-20" : ""
-                                  } ${
-                                    isSel
-                                      ? mode === "mtg"
-                                        ? "bg-violet-500 border border-violet-400"
-                                        : "bg-blue-500 border border-blue-400"
-                                      : "bg-gray-200 border border-gray-300 opacity-50"
-                                  }`}
+                                  } ${style.bg} ${style.dim ? "opacity-40" : ""}`}
                                   style={{ top, height }}
                                 >
-                                  <div className={`px-1 ${isShort ? "pt-0" : "pt-0.5"} h-full`}>
-                                    <p className={`font-semibold leading-tight ${
+                                  <div className={`px-1 ${isShort ? "pt-0" : "pt-0.5"} h-full flex items-start gap-0.5`}>
+                                    {/* 済みアイコン */}
+                                    {(st === "imported-task" || st === "imported-mtg") && (
+                                      <svg className="h-2.5 w-2.5 shrink-0 mt-0.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                    <p className={`font-semibold leading-tight flex-1 min-w-0 ${
                                       isShort ? "text-[8px] truncate" : "text-[9px] line-clamp-2"
-                                    } ${isSel ? "text-white" : "text-gray-500"}`}>
+                                    } ${style.text}`}>
                                       {startTime} {ev.summary}
                                     </p>
                                   </div>
@@ -563,13 +554,13 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
               </div>
             </div>
 
-            {/* イベント設定パネル */}
+            {/* イベント操作パネル */}
             {activeEventId && (() => {
               const ev = events.find(e => e.id === activeEventId);
               if (!ev) return null;
-              const isSel = selected.has(ev.id);
-              const mode = importMode[ev.id] ?? "task";
+              const st = eventStatus[ev.id];
               const duration = getEventDurationMin(ev);
+              const isImported = st === "imported-task" || st === "imported-mtg";
               return (
                 <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 space-y-2.5">
                   {/* イベント情報 */}
@@ -590,43 +581,39 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                       </svg>
                     </button>
                   </div>
-                  {/* 取り込む / スキップ */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { if (!isSel) toggleSelect(ev.id); }}
-                      className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
-                        isSel ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                      }`}
-                    >
-                      取り込む
-                    </button>
-                    <button
-                      onClick={() => { if (isSel) toggleSelect(ev.id); }}
-                      className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
-                        !isSel ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
-                      }`}
-                    >
-                      スキップ
-                    </button>
-                  </div>
-                  {/* タスク / MTG（取り込む選択時のみ） */}
-                  {isSel && (
+
+                  {isImported ? (
+                    /* 取り込み済みの場合 */
+                    <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ${
+                      st === "imported-mtg" ? "bg-violet-50" : "bg-blue-50"
+                    }`}>
+                      <svg className={`h-4 w-4 shrink-0 ${st === "imported-mtg" ? "text-violet-500" : "text-blue-500"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className={`text-xs font-semibold ${st === "imported-mtg" ? "text-violet-700" : "text-blue-700"}`}>
+                        {st === "imported-mtg" ? "MTGとして記録済み" : "タスクに追加済み"}
+                      </span>
+                    </div>
+                  ) : (
+                    /* 未取り込み（neutral / skipped）の場合 */
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setMode(ev.id, "task")}
-                        className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
-                          mode === "task" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
-                        }`}
+                        onClick={() => importEvent(ev, "task")}
+                        className="flex-1 rounded-xl py-2 text-xs font-semibold bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 transition-all"
                       >
                         タスクに追加
                       </button>
                       <button
-                        onClick={() => setMode(ev.id, "mtg")}
-                        className={`flex-1 rounded-xl py-2 text-xs font-semibold border transition-all ${
-                          mode === "mtg" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
-                        }`}
+                        onClick={() => importEvent(ev, "mtg")}
+                        className="flex-1 rounded-xl py-2 text-xs font-semibold bg-violet-600 text-white border border-violet-600 hover:bg-violet-700 transition-all"
                       >
                         MTGとして記録
+                      </button>
+                      <button
+                        onClick={() => skipEvent(ev.id)}
+                        className="flex-1 rounded-xl py-2 text-xs font-semibold bg-white text-gray-400 border border-gray-200 hover:bg-gray-50 transition-all"
+                      >
+                        スキップ
                       </button>
                     </div>
                   )}
@@ -645,27 +632,11 @@ export default function GoogleCalendarSync({ onAddTasks, onClose }: GoogleCalend
                 <span className="text-[10px] text-gray-500">MTG</span>
               </div>
               <span className="text-[10px] text-gray-400 ml-auto hidden sm:block">
-                予定をタップして設定
+                {importedCount > 0
+                  ? `${importedCount}件取り込み済み`
+                  : "予定をタップして取り込む"}
               </span>
             </div>
-          </div>
-        )}
-
-        {/* フッター */}
-        {accessToken && (
-          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 shrink-0 bg-gray-50/40">
-            <p className="text-[10px] text-gray-400">
-              {selected.size}件を選択中
-              {taskCount > 0 && <span className="ml-1 text-blue-500">タスク{taskCount}</span>}
-              {mtgCount > 0 && <span className="ml-1 text-violet-500">MTG{mtgCount}</span>}
-            </p>
-            <button
-              onClick={handleImport}
-              disabled={selected.size === 0}
-              className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm shadow-blue-200 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              選択した予定（{selected.size}件）を取り込む
-            </button>
           </div>
         )}
       </div>
